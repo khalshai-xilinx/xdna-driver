@@ -30,10 +30,14 @@ static void cert_setup_partition(struct amdxdna_dev *xdna,
 	u32 start_col = nhwctx->start_col;
 	u32 num_col = nhwctx->num_col;
 	u64 hsa_addr = 0xFFFFFFFFFFFFFFFF;
+	u64 dbg_addr = 0xFFFFFFFFFFFFFFFF;
 	struct ve2_config_hwctx *hwctx_cfg = &nhwctx->hwctx_config[col];
 
-	if (col == 0)
+	if (col == 0) {
 		hsa_addr = nhwctx->hwctx_hsa_queue.hsa_queue_mem.dma_addr;
+		if (enable_debug_queue)
+			dbg_addr = nhwctx->hwctx_dbg_queue.dbg_queue_mem.dma_addr;
+	}
 
 	u32 lead_col_addr = VE2_ADDR(start_col, 0, 0);
 
@@ -41,6 +45,8 @@ static void cert_setup_partition(struct amdxdna_dev *xdna,
 	cert_hs->aie_info.partition_size = num_col;
 	cert_hs->hsa_addr_high =  upper_32_bits(hsa_addr);
 	cert_hs->hsa_addr_low =  lower_32_bits(hsa_addr);
+	cert_hs->dbg.hsa_addr_high =  upper_32_bits(dbg_addr);
+	cert_hs->dbg.hsa_addr_low =  lower_32_bits(dbg_addr);
 	cert_hs->log_addr_high = upper_32_bits(hwctx_cfg->log_buf_addr);
 	cert_hs->log_addr_low = lower_32_bits(hwctx_cfg->log_buf_addr);
 	cert_hs->log_buf_size = hwctx_cfg->log_buf_size;
@@ -57,8 +63,6 @@ static void cert_setup_partition(struct amdxdna_dev *xdna,
 
 	cert_hs->ctx_switch_req = 0;
 	cert_hs->hsa_location = 0;
-	cert_hs->dbg.hsa_addr_high = 0xFFFFFFFF;
-	cert_hs->dbg.hsa_addr_low = 0xFFFFFFFF;
 	cert_hs->mpaie_alive = ALIVE_MAGIC;
 }
 
@@ -802,7 +806,10 @@ static void ve2_dump_debug_state(struct amdxdna_dev *xdna,
 	mutex_lock(&hq->hq_lock);
 
 	/* Sync read_index before reading (device writes this) */
-	hsa_queue_sync_read_index_for_read(hq);
+	ve2_queue_sync_read_index_for_read(hq->alloc_dev,
+					   hq->hsa_queue_mem.dma_addr +
+					   offsetof(struct hsa_queue, hq_header) +
+					   offsetof(struct host_queue_header, read_index));
 	/* Note: write_index is written by CPU, so no sync needed for reading */
 
 	/* Dump HSA queue header */
@@ -822,7 +829,9 @@ static void ve2_dump_debug_state(struct amdxdna_dev *xdna,
 	XDNA_WARN(xdna, "HSA Queue Completion Status:\n");
 	for (i = 0; i < HOST_QUEUE_ENTRY; i++) {
 		/* Sync completion memory before reading (device may have written) */
-		hsa_queue_sync_completion_for_read(hq, i);
+		ve2_queue_sync_completion_for_read(hq->alloc_dev,
+						   hq->hq_complete.hqc_dma_addr +
+						   i * sizeof(u64));
 		u64 completion = hq->hq_complete.hqc_mem[i];
 
 		if (completion != 0 && completion != ERT_CMD_STATE_INVALID)

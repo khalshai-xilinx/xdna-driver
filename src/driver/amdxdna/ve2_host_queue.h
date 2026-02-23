@@ -137,43 +137,25 @@ struct ve2_hsa_queue {
  */
 
 /* Sync read_index field before CPU reads (device writes this) */
-static inline void hsa_queue_sync_read_index_for_read(struct ve2_hsa_queue *queue)
+static inline void ve2_queue_sync_read_index_for_read(struct device *alloc_dev,
+						      dma_addr_t read_idx_addr)
 {
-	dma_addr_t read_idx_addr = queue->hsa_queue_mem.dma_addr +
-		offsetof(struct hsa_queue, hq_header) +
-		offsetof(struct host_queue_header, read_index);
-
-	dma_sync_single_for_cpu(queue->alloc_dev,
-				read_idx_addr,
-				sizeof(queue->hsa_queue_p->hq_header.read_index),
-				DMA_FROM_DEVICE);
+	dma_sync_single_for_cpu(alloc_dev, read_idx_addr, sizeof(u64), DMA_FROM_DEVICE);
 }
 
 /* Sync write_index field after CPU writes (device reads this) */
-static inline void hsa_queue_sync_write_index_for_write(struct ve2_hsa_queue *queue)
+static inline void ve2_queue_sync_write_index_for_write(struct device *alloc_dev,
+							dma_addr_t write_idx_addr)
 {
-	dma_addr_t write_idx_addr = queue->hsa_queue_mem.dma_addr +
-		offsetof(struct hsa_queue, hq_header) +
-		offsetof(struct host_queue_header, write_index);
-
-	dma_sync_single_for_device(queue->alloc_dev,
-				   write_idx_addr,
-				   sizeof(queue->hsa_queue_p->hq_header.write_index),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(alloc_dev, write_idx_addr, sizeof(u64), DMA_TO_DEVICE);
 }
 
 /* Sync packet data after CPU writes (device will read) */
-static inline void hsa_queue_sync_packet_for_write(struct ve2_hsa_queue *queue,
-						   u32 slot_idx)
+static inline void ve2_queue_sync_packet_for_write(struct device *alloc_dev,
+						   dma_addr_t pkt_dma_addr)
 {
-	dma_addr_t pkt_dma_addr = queue->hsa_queue_mem.dma_addr +
-		offsetof(struct hsa_queue, hq_entry) +
-		slot_idx * sizeof(struct host_queue_packet);
-
-	dma_sync_single_for_device(queue->alloc_dev,
-				   pkt_dma_addr,
-				   sizeof(struct host_queue_packet),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(alloc_dev, pkt_dma_addr,
+				   sizeof(struct host_queue_packet), DMA_TO_DEVICE);
 }
 
 /* Sync indirect header after CPU writes (device will read) */
@@ -205,30 +187,47 @@ static inline void hsa_queue_sync_indirect_pkt_for_write(struct ve2_hsa_queue *q
 }
 
 /* Sync completion memory before CPU reads (device may have written) */
-static inline void hsa_queue_sync_completion_for_read(struct ve2_hsa_queue *queue,
-						      u32 slot_idx)
+static inline void ve2_queue_sync_completion_for_read(struct device *alloc_dev,
+						      dma_addr_t comp_dma_addr)
 {
-	dma_addr_t comp_dma_addr = queue->hq_complete.hqc_dma_addr +
-		slot_idx * sizeof(u64);
-
-	dma_sync_single_for_cpu(queue->alloc_dev,
-				comp_dma_addr,
-				sizeof(u64),
-				DMA_FROM_DEVICE);
+	dma_sync_single_for_cpu(alloc_dev, comp_dma_addr, sizeof(u64), DMA_FROM_DEVICE);
 }
 
 /* Sync completion memory after CPU writes (device will read) */
-static inline void hsa_queue_sync_completion_for_write(struct ve2_hsa_queue *queue,
-						       u32 slot_idx)
+static inline void ve2_queue_sync_completion_for_write(struct device *alloc_dev,
+						       dma_addr_t comp_dma_addr)
 {
-	dma_addr_t comp_dma_addr = queue->hq_complete.hqc_dma_addr +
-		slot_idx * sizeof(u64);
-
-	dma_sync_single_for_device(queue->alloc_dev,
-				   comp_dma_addr,
-				   sizeof(u64),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(alloc_dev, comp_dma_addr, sizeof(u64), DMA_TO_DEVICE);
 }
+
+enum dbg_cmd_type {
+	DBG_CMD_EXIT = 11,
+	DBG_CMD_READ = 12,
+	DBG_CMD_WRITE = 13,
+};
+
+struct rw_mem {
+	u32				aie_addr;
+	u32				length;
+	u32				host_addr_high;
+	u32				host_addr_low;
+};
+
+struct dbg_queue {
+	struct host_queue_header	hq_header;
+	struct host_queue_packet	hq_entry[HOST_QUEUE_ENTRY];
+};
+
+struct ve2_dbg_queue {
+	struct dbg_queue		*dbg_queue_p;
+	struct ve2_mem			dbg_queue_mem;
+	struct ve2_hq_complete		hq_complete;
+	// hq_lock protects [read | write]_index and reserved_write_index
+	struct mutex			hq_lock;
+	u64				reserved_write_index;
+	/* Device used for host queue allocation */
+	struct device			*alloc_dev;
+};
 
 /* handshake */
 #define ALIVE_MAGIC 0x404C5645

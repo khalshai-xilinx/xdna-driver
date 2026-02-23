@@ -66,6 +66,11 @@ struct misc_info {
 	u32 ppc;
 };
 
+extern int enable_debug_queue;
+
+int submit_command_to_dbg_queue(struct amdxdna_ctx *hwctx, u32 opcode,
+				u32 aie_addr, u64 paddr, u32 length);
+
 // Read from handshake memory
 static inline int
 ve2_partition_read_privileged_mem(struct device *aie_dev, u32 col,
@@ -139,7 +144,10 @@ static inline int get_ctx_read_index(struct amdxdna_ctx *hwctx, u64 *read_index)
 
 	queue = &hwctx->priv->hwctx_hsa_queue;
 	/* Sync read_index before reading (device may have written) */
-	hsa_queue_sync_read_index_for_read(queue);
+	ve2_queue_sync_read_index_for_read(queue->alloc_dev,
+					   queue->hsa_queue_mem.dma_addr +
+					   offsetof(struct hsa_queue, hq_header) +
+					   offsetof(struct host_queue_header, read_index));
 
 	index_ptr = (u64 *)((char *)queue->hsa_queue_p +
 			HSA_QUEUE_READ_INDEX_OFFSET);
