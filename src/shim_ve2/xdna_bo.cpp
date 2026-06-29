@@ -142,7 +142,7 @@ xdna_bo(const device_xdna& device, xrt_core::hwctx_handle::slot_id ctx_id,
   // BO starts clean; subsequent coherency is the app's responsibility via
   // explicit sync().
   if (m_type == AMDXDNA_BO_SHARE)
-    sync(direction::host2device, m_aligned_size, 0);
+    sync(direction::device2host, m_aligned_size, 0);
 
   shim_debug("Allocated DRM BO (userptr=0x%lx, size=%ld, flags=0x%llx, type=%d, drm_bo=%d)",
 	     m_ptr, m_aligned_size, m_flags, m_type, get_drm_bo_handle());

@@ -212,7 +212,7 @@ static inline void hsa_queue_sync_completion_for_read(struct ve2_hsa_queue *queu
 	dma_sync_single_for_cpu(queue->alloc_dev,
 				comp_dma_addr,
 				sizeof(u64),
-				DMA_FROM_DEVICE);
+				DMA_BIDIRECTIONAL);
 }
 
 /* Sync completion memory after CPU writes (device will read) */
@@ -225,7 +225,7 @@ static inline void hsa_queue_sync_completion_for_write(struct ve2_hsa_queue *que
 	dma_sync_single_for_device(queue->alloc_dev,
 				   comp_dma_addr,
 				   sizeof(u64),
-				   DMA_TO_DEVICE);
+				   DMA_BIDIRECTIONAL);
 }
 
 /* handshake */
